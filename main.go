@@ -229,11 +229,11 @@ func main() {
 	mux.HandleFunc("/v1/images", func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[IMG] Request from %s: %s %s", r.RemoteAddr, r.Method, r.URL.Path)
 
-		if r.Method != http.MethodPost {
-			log.Printf("[IMG] Method not allowed: %s", r.Method)
-			writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "only POST is allowed", nil)
-			return
-		}
+		// if r.Method != http.MethodPost {
+		// 	log.Printf("[IMG] Method not allowed: %s", r.Method)
+		// 	writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "only POST is allowed", nil)
+		// 	return
+		// }
 
 		var req GenerateRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
