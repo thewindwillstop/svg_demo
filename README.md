@@ -41,14 +41,14 @@ Base URL: `http://localhost:8080`
 {
   "prompt": "A minimalist fox head vector logo",
   "negative_prompt": "text, watermark",
-  "style": "flat"
+  "style": "FLAT_VECTOR"
 }
 ```
 字段说明:
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | prompt | string | 是 | 最少 3 字符 |
-| negative_prompt | string | 否 | 反向提示词 |
+| negative_prompt | string | 是 | 反向提示词 |
 | style | string | 否 | 样式标签 |
 | format | string | 否 | 预留，当前忽略 |
 
