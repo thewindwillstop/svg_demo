@@ -1,17 +1,31 @@
-# SVG 生成服务 
+# SVG 生成服务 - 重构版本 + 翻译功能
+
+## 🆕 新增功能：自动翻译
+
+支持中文提示词自动翻译为英文！当检测到中文字符时，会先调用 OpenAI API 进行翻译，然后使用翻译后的英文提示词生成图像。
+
+### 翻译功能特点：
+- 🧠 智能检测：自动识别中文字符
+- 🔄 实时翻译：使用 OpenAI API 将中文翻译为英文
+- 🚀 无缝集成：翻译失败不影响图像生成流程
+- 📊 透明信息：响应中包含原文、译文和翻译状态
+- ⏭️ 可跳过：支持 `skip_translate` 参数强制跳过翻译 
 
 ## 项目结构
 
 ```
 Svg_demo/
 ├── main.go        # 主入口，服务启动和路由注册
-├── types.go       # 数据类型定义
+├── types.go       # 数据类型定义（增加翻译字段）
 ├── config.go      # 配置常量
-├── handlers.go    # HTTP 请求处理器
+├── handlers.go    # HTTP 请求处理器（集成翻译逻辑）
 ├── upstream.go    # 上游 API 客户端
 ├── client.go      # HTTP 客户端工具
 ├── utils.go       # 工具函数和中间件
-└── API_DOC.md     # API 文档
+├── translate.go   # 🆕 翻译服务模块
+├── test_translation.sh # 🆕 翻译功能测试脚本
+├── .env.example   # 环境变量示例
+└── API_DOC.md     # API 文档（更新翻译功能）
 ```
 
 ## 模块说明
@@ -45,10 +59,15 @@ Svg_demo/
 - 通用文件下载客户端
 - HTTP 请求工具
 
-### utils.go
-- HTTP 响应工具函数
-- CORS 中间件
-- 字符串转换工具
+### translate.go
+- OpenAI API 翻译服务实现
+- 中文字符检测算法
+- 翻译错误处理和降级策略
+
+### test_translation.sh
+- 翻译功能自动化测试脚本
+- 验证中文翻译和英文跳过逻辑
+- 测试 SVG 和 JSON 两种响应格式
 
 ## 优势
 
@@ -83,6 +102,43 @@ go run .
 
 - Go 1.19+
 - `.env` 文件包含 `SVGIO_API_KEY`
+- 🆕 `.env` 文件包含 `OPENAI_API_KEY`（可选，用于翻译功能）
+
+## 使用示例
+
+### 中文输入自动翻译
+```bash
+# JSON 响应
+curl -X POST http://localhost:8080/v1/images \
+  -H 'Content-Type: application/json' \
+  -d '{"prompt": "一只可爱的卡通狐狸", "style": "卡通"}'
+
+# 直接下载 SVG
+curl -X POST http://localhost:8080/v1/images/svg \
+  -H 'Content-Type: application/json' \
+  -d '{"prompt": "简约的猫头鹰图标"}' \
+  -o owl.svg
+```
+
+### 跳过翻译
+```bash
+curl -X POST http://localhost:8080/v1/images \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "prompt": "A cute cartoon fox",
+    "style": "cartoon",
+    "skip_translate": true
+  }'
+```
+
+### 运行测试脚本
+```bash
+# 确保服务运行中
+go run . &
+
+# 运行翻译功能测试
+./test_translation.sh
+```
 
 Base URL: `http://localhost:8080`
 
