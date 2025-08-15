@@ -1,0 +1,93 @@
+# SVG Generation Service Configuration
+
+# Server configuration
+server:
+  port: 8080
+  host: "0.0.0.0"
+  timeout: 60s
+  read_timeout: 30s
+  write_timeout: 30s
+
+# Provider configurations
+providers:
+  # SVG.IO configuration
+  svgio:
+    base_url: "https://api.svg.io"
+    endpoints:
+      generate: "/v1/generate-image"
+      get_image: "/v1/get-image/"
+    timeout: 60s
+    max_retries: 3
+    enabled: true
+
+  # Recraft configuration  
+  recraft:
+    base_url: "https://external.api.recraft.ai"
+    endpoints:
+      generate: "/v1/images/generations"
+      vectorize: "/v1/images/vectorize"
+    timeout: 60s
+    max_retries: 3
+    enabled: true
+    default_model: "recraftv3"
+    supported_models:
+      - "recraftv3"
+      - "recraftv2"
+
+  # Claude configuration
+  claude:
+    base_url: "https://api.qnaigc.com/v1/"
+    endpoints:
+      chat: "/chat/completions"
+    timeout: 60s
+    max_retries: 3
+    enabled: true
+    default_model: "claude-4.0-sonnet"
+    max_tokens: 4000
+    temperature: 0.7
+
+# Translation service configuration
+translation:
+  enabled: true
+  service_url: "https://api.siliconflow.cn/v1/chat/completions"
+  default_model: "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B"
+  timeout: 45s
+  max_retries: 2
+  fallback_enabled: true
+  # Alternative models for fallback
+  fallback_models:
+    - "gpt-3.5-turbo"
+    - "gpt-4"
+
+# HTTP client configuration
+http_client:
+  timeout: 60s
+  max_idle_conns: 100
+  max_idle_conns_per_host: 10
+  idle_conn_timeout: 90s
+  dial_timeout: 30s
+  tls_handshake_timeout: 10s
+
+# Logging configuration
+logging:
+  level: "info"
+  format: "json"
+  output: "stdout"
+  enable_request_logging: true
+  enable_error_stack: true
+
+# Feature flags
+features:
+  enable_cors: true
+  enable_metrics: false
+  enable_tracing: false
+  enable_rate_limiting: false
+  enable_caching: false
+
+# Security configuration
+security:
+  enable_api_key_validation: false
+  allowed_origins:
+    - "*"
+  max_request_size: "10MB"
+  enable_request_id: true

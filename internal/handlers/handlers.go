@@ -11,45 +11,43 @@ import (
 	"strings"
 	"time"
 
-	"miniSvg/internal/client"
-	"miniSvg/internal/translate"
-	"miniSvg/internal/types"
-	"miniSvg/internal/upstream"
-	"miniSvg/pkg/utils"
+	"svg-generator/internal/service"
+	"svg-generator/internal/types"
+	"svg-generator/pkg/utils"
 )
 
 // SVGHandler SVG生成和下载处理器 (使用 SVG.IO)
-func SVGHandler(serviceManager *upstream.ServiceManager, translateService translate.Service) http.HandlerFunc {
+func SVGHandler(serviceManager *service.ServiceManager, translateService utils.TranslateService) http.HandlerFunc {
 	return generateHandler(serviceManager, translateService, types.ProviderSVGIO, true)
 }
 
 // RecraftSVGHandler Recraft SVG生成和下载处理器
-func RecraftSVGHandler(serviceManager *upstream.ServiceManager, translateService translate.Service) http.HandlerFunc {
+func RecraftSVGHandler(serviceManager *service.ServiceManager, translateService utils.TranslateService) http.HandlerFunc {
 	return generateHandler(serviceManager, translateService, types.ProviderRecraft, true)
 }
 
 // ImageHandler JSON 元数据接口处理器 (使用 SVG.IO)
-func ImageHandler(serviceManager *upstream.ServiceManager, translateService translate.Service) http.HandlerFunc {
+func ImageHandler(serviceManager *service.ServiceManager, translateService utils.TranslateService) http.HandlerFunc {
 	return generateHandler(serviceManager, translateService, types.ProviderSVGIO, false)
 }
 
 // RecraftImageHandler Recraft JSON 元数据接口处理器
-func RecraftImageHandler(serviceManager *upstream.ServiceManager, translateService translate.Service) http.HandlerFunc {
+func RecraftImageHandler(serviceManager *service.ServiceManager, translateService utils.TranslateService) http.HandlerFunc {
 	return generateHandler(serviceManager, translateService, types.ProviderRecraft, false)
 }
 
 // ClaudeSVGHandler Claude SVG生成和下载处理器
-func ClaudeSVGHandler(serviceManager *upstream.ServiceManager, translateService translate.Service) http.HandlerFunc {
+func ClaudeSVGHandler(serviceManager *service.ServiceManager, translateService utils.TranslateService) http.HandlerFunc {
 	return generateHandler(serviceManager, translateService, types.ProviderClaude, true)
 }
 
 // ClaudeImageHandler Claude JSON 元数据接口处理器
-func ClaudeImageHandler(serviceManager *upstream.ServiceManager, translateService translate.Service) http.HandlerFunc {
+func ClaudeImageHandler(serviceManager *service.ServiceManager, translateService utils.TranslateService) http.HandlerFunc {
 	return generateHandler(serviceManager, translateService, types.ProviderClaude, false)
 }
 
 // generateHandler 通用图像生成处理器
-func generateHandler(serviceManager *upstream.ServiceManager, translateService translate.Service, provider types.Provider, directSVG bool) http.HandlerFunc {
+func generateHandler(serviceManager *service.ServiceManager, translateService utils.TranslateService, provider types.Provider, directSVG bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		providerName := string(provider)
 		log.Printf("[%s] Request from %s: %s %s", providerName, r.RemoteAddr, r.Method, r.URL.Path)
@@ -137,7 +135,7 @@ func generateHandler(serviceManager *upstream.ServiceManager, translateService t
 				log.Printf("[%s] Parsed data URL - size: %d bytes", providerName, len(svgBytes))
 			} else {
 				// 处理HTTP/HTTPS URL
-				svgBytes, err = client.DownloadFile(ctx, img.SVGURL)
+				svgBytes, err = utils.DownloadFile(ctx, img.SVGURL)
 				if err != nil {
 					log.Printf("[%s] Download failed: %v", providerName, err)
 					utils.WriteError(w, http.StatusBadGateway, "download_error", "failed to download generated svg", err.Error())
