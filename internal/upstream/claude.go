@@ -205,7 +205,12 @@ Visual Quality Standards:
 • Create depth and dimension through layering and visual effects
 
 Output Format:
-Return ONLY the complete SVG code starting with <svg> and ending with </svg>. No explanations, no code blocks, no additional text.`)
+Return ONLY the complete SVG code starting with <svg> and ending with </svg>. No explanations, no code blocks, no additional text.
+In SVG, do not use elements like rect; all drawing should be implemented via the path element.
+
+`)
+
+
 
 	return promptBuilder.String()
 }
