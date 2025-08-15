@@ -8,6 +8,7 @@ type Provider string
 const (
 	ProviderSVGIO   Provider = "svgio"
 	ProviderRecraft Provider = "recraft"
+	ProviderClaude  Provider = "claude"
 )
 
 // API 请求和响应类型定义
@@ -116,4 +117,36 @@ type RecraftVectorizeReq struct {
 
 type RecraftVectorizeResp struct {
 	Image RecraftImageData `json:"image"`
+}
+
+// Claude API 相关类型
+
+type ClaudeMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+type ClaudeGenerateReq struct {
+	Model       string          `json:"model"`
+	Messages    []ClaudeMessage `json:"messages"`
+	MaxTokens   int             `json:"max_tokens"`
+	Temperature float64         `json:"temperature,omitempty"`
+	System      string          `json:"system,omitempty"`
+}
+
+type ClaudeGenerateResp struct {
+	ID      string `json:"id"`
+	Type    string `json:"type"`
+	Role    string `json:"role"`
+	Content []struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
+	} `json:"content"`
+	Model        string `json:"model"`
+	StopReason   string `json:"stop_reason"`
+	StopSequence string `json:"stop_sequence"`
+	Usage        struct {
+		InputTokens  int `json:"input_tokens"`
+		OutputTokens int `json:"output_tokens"`
+	} `json:"usage"`
 }

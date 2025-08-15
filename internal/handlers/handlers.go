@@ -2,11 +2,13 @@ package handlers
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"miniSvg/internal/client"
@@ -34,6 +36,16 @@ func ImageHandler(serviceManager *upstream.ServiceManager, translateService tran
 // RecraftImageHandler Recraft JSON 元数据接口处理器
 func RecraftImageHandler(serviceManager *upstream.ServiceManager, translateService translate.Service) http.HandlerFunc {
 	return generateHandler(serviceManager, translateService, types.ProviderRecraft, false)
+}
+
+// ClaudeSVGHandler Claude SVG生成和下载处理器
+func ClaudeSVGHandler(serviceManager *upstream.ServiceManager, translateService translate.Service) http.HandlerFunc {
+	return generateHandler(serviceManager, translateService, types.ProviderClaude, true)
+}
+
+// ClaudeImageHandler Claude JSON 元数据接口处理器
+func ClaudeImageHandler(serviceManager *upstream.ServiceManager, translateService translate.Service) http.HandlerFunc {
+	return generateHandler(serviceManager, translateService, types.ProviderClaude, false)
 }
 
 // generateHandler 通用图像生成处理器
@@ -66,7 +78,7 @@ func generateHandler(serviceManager *upstream.ServiceManager, translateService t
 			return
 		}
 
-		// 翻译处理 (仅对 SVG.IO 提供商进行翻译，Recraft 支持中文)
+		// 翻译处理 (仅对 SVG.IO 提供商进行翻译，Recraft 和 Claude 支持中文)
 		originalPrompt := req.Prompt
 		translatedPrompt := req.Prompt
 		wasTranslated := false
@@ -108,14 +120,31 @@ func generateHandler(serviceManager *upstream.ServiceManager, translateService t
 
 		if directSVG {
 			// 直接返回 SVG 文件
-			log.Printf("[%s] Downloading SVG content from: %s", providerName, img.SVGURL)
-			svgBytes, err := client.DownloadFile(ctx, img.SVGURL)
-			if err != nil {
-				log.Printf("[%s] Download failed: %v", providerName, err)
-				utils.WriteError(w, http.StatusBadGateway, "download_error", "failed to download generated svg", err.Error())
-				return
+			log.Printf("[%s] Processing SVG content from: %s", providerName, img.SVGURL)
+
+			var svgBytes []byte
+			var err error
+
+			// 检查是否是data URL
+			if strings.HasPrefix(img.SVGURL, "data:") {
+				// 处理data URL
+				svgBytes, err = parseDataURL(img.SVGURL)
+				if err != nil {
+					log.Printf("[%s] Failed to parse data URL: %v", providerName, err)
+					utils.WriteError(w, http.StatusInternalServerError, "parse_error", "failed to parse data URL", err.Error())
+					return
+				}
+				log.Printf("[%s] Parsed data URL - size: %d bytes", providerName, len(svgBytes))
+			} else {
+				// 处理HTTP/HTTPS URL
+				svgBytes, err = client.DownloadFile(ctx, img.SVGURL)
+				if err != nil {
+					log.Printf("[%s] Download failed: %v", providerName, err)
+					utils.WriteError(w, http.StatusBadGateway, "download_error", "failed to download generated svg", err.Error())
+					return
+				}
+				log.Printf("[%s] Download successful - size: %d bytes", providerName, len(svgBytes))
 			}
-			log.Printf("[%s] Download successful - size: %d bytes", providerName, len(svgBytes))
 
 			w.Header().Set("Content-Type", "image/svg+xml")
 			w.Header().Set("Content-Disposition", "attachment; filename=\""+img.ID+".svg\"")
@@ -177,6 +206,42 @@ func HealthHandler() http.HandlerFunc {
 			"status": "ok",
 			"time":   time.Now().Format(time.RFC3339),
 		})
+	}
+}
+
+// parseDataURL 解析data URL并返回解码后的数据
+func parseDataURL(dataURL string) ([]byte, error) {
+	// data URL格式: data:[<mediatype>][;base64],<data>
+	// 例如: data:image/svg+xml;base64,<base64-encoded-data>
+
+	if !strings.HasPrefix(dataURL, "data:") {
+		return nil, errors.New("invalid data URL: missing data: prefix")
+	}
+
+	// 去掉"data:"前缀
+	dataURL = dataURL[5:]
+
+	// 查找逗号分隔符
+	commaIndex := strings.Index(dataURL, ",")
+	if commaIndex == -1 {
+		return nil, errors.New("invalid data URL: missing comma separator")
+	}
+
+	// 获取媒体类型和编码信息
+	mediaType := dataURL[:commaIndex]
+	data := dataURL[commaIndex+1:]
+
+	// 检查是否是base64编码
+	if strings.Contains(mediaType, "base64") {
+		// base64解码
+		decoded, err := base64.StdEncoding.DecodeString(data)
+		if err != nil {
+			return nil, errors.New("failed to decode base64 data: " + err.Error())
+		}
+		return decoded, nil
+	} else {
+		// 非base64编码，直接返回字符串的字节
+		return []byte(data), nil
 	}
 }
 

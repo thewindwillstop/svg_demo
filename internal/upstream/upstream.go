@@ -22,12 +22,14 @@ type UpstreamService interface {
 type ServiceManager struct {
 	svgioService   *SVGIOService
 	recraftService *RecraftService
+	claudeService  *ClaudeService
 }
 
 // NewServiceManager 创建服务管理器
-func NewServiceManager(svgioAPIKey, recraftAPIKey string) *ServiceManager {
+func NewServiceManager(svgioAPIKey, recraftAPIKey, claudeAPIKey, claudeBaseURL string) *ServiceManager {
 	var svgioService *SVGIOService
 	var recraftService *RecraftService
+	var claudeService *ClaudeService
 
 	if svgioAPIKey != "" {
 		svgioService = NewSVGIOService(svgioAPIKey)
@@ -37,9 +39,14 @@ func NewServiceManager(svgioAPIKey, recraftAPIKey string) *ServiceManager {
 		recraftService = NewRecraftService(recraftAPIKey)
 	}
 
+	if claudeAPIKey != "" {
+		claudeService = NewClaudeService(claudeAPIKey, claudeBaseURL)
+	}
+
 	return &ServiceManager{
 		svgioService:   svgioService,
 		recraftService: recraftService,
+		claudeService:  claudeService,
 	}
 }
 
@@ -51,6 +58,11 @@ func (sm *ServiceManager) GenerateImage(ctx context.Context, req types.GenerateR
 			return nil, errors.New("recraft service not configured")
 		}
 		return sm.recraftService.GenerateImage(ctx, req)
+	case types.ProviderClaude:
+		if sm.claudeService == nil {
+			return nil, errors.New("claude service not configured")
+		}
+		return sm.claudeService.GenerateImage(ctx, req)
 	case types.ProviderSVGIO:
 		fallthrough
 	default:
@@ -110,11 +122,11 @@ func (s *SVGIOService) GenerateImage(ctx context.Context, req types.GenerateRequ
 		InitialImageType: nil,
 	}
 	if req.NegativePrompt == "" {
-		defaultNegativePrompt:="NULL"
+		defaultNegativePrompt := "NULL"
 		upReq.NegativePrompt = &defaultNegativePrompt
 	}
 	if req.Style == "" {
-		defaultStyle:= "FLAT_VECTOR"
+		defaultStyle := "FLAT_VECTOR"
 		upReq.Style = &defaultStyle
 
 	}

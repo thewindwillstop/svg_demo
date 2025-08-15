@@ -35,10 +35,17 @@ func NewRecraftService(apiKey string) *RecraftService {
 func (s *RecraftService) GenerateImage(ctx context.Context, req types.GenerateRequest) (*types.ImageResponse, error) {
 	log.Printf("[RECRAFT] Starting generation request...")
 
+	// 构建优化后的提示词（添加无背景要求）
+	enhancedPrompt, enhancedNegativePrompt := s.buildRecraftPrompt(req.Prompt, req.Style, req.NegativePrompt)
+
+	log.Printf("[RECRAFT] Original prompt: %s", req.Prompt)
+	log.Printf("[RECRAFT] Enhanced prompt: %s", enhancedPrompt)
+	log.Printf("[RECRAFT] Enhanced negative prompt: %s", enhancedNegativePrompt)
+
 	// 构建 Recraft API 请求
 	recraftReq := types.RecraftGenerateReq{
-		Prompt:         req.Prompt,
-		NegativePrompt: req.NegativePrompt,
+		Prompt:         enhancedPrompt,
+		NegativePrompt: enhancedNegativePrompt,
 		Style:          req.Style,
 		Substyle:       req.Substyle,
 		Model:          req.Model,
@@ -49,7 +56,7 @@ func (s *RecraftService) GenerateImage(ctx context.Context, req types.GenerateRe
 
 	// 设置默认值
 	if recraftReq.Model == "" {
-		recraftReq.Model = "recraftv3"
+		recraftReq.Model = "recraftv2"
 	}
 	if recraftReq.Size == "" {
 		recraftReq.Size = "1024x1024"
@@ -221,4 +228,26 @@ func parseSizeFromString(size string) (width, height int) {
 // generateImageID 生成简单的图片 ID
 func generateImageID() string {
 	return fmt.Sprintf("recraft_%d", time.Now().UnixNano())
+}
+
+// buildRecraftPrompt 构建Recraft的提示词，自动添加无背景要求
+func (s *RecraftService) buildRecraftPrompt(prompt, style, negativePrompt string) (string, string) {
+	var promptBuilder strings.Builder
+	var negativeBuilder strings.Builder
+
+	// 构建主提示词
+	promptBuilder.WriteString(prompt)
+
+	
+	promptBuilder.WriteString(", 背景色为透明色，不要背景边框")
+
+	// 构建负面提示词
+	if negativePrompt != "" {
+		negativeBuilder.WriteString(negativePrompt)
+		negativeBuilder.WriteString(", ")
+	}
+
+	// 添加默认的背景相关负面提示词
+
+	return promptBuilder.String(), negativeBuilder.String()
 }

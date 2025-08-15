@@ -21,9 +21,11 @@ func main() {
 	// 加载 API 密钥
 	svgioAPIKey := os.Getenv("SVGIO_API_KEY")
 	recraftAPIKey := os.Getenv("RECRAFT_API_KEY")
+	claudeAPIKey := os.Getenv("CLAUDE_API_KEY")
+	claudeBaseURL := os.Getenv("CLAUDE_BASE_URL")
 
-	if svgioAPIKey == "" && recraftAPIKey == "" {
-		log.Fatal("At least one of SVGIO_API_KEY or RECRAFT_API_KEY must be provided")
+	if svgioAPIKey == "" && recraftAPIKey == "" && claudeAPIKey == "" {
+		log.Fatal("At least one of SVGIO_API_KEY, RECRAFT_API_KEY, or CLAUDE_API_KEY must be provided")
 	}
 
 	if svgioAPIKey != "" {
@@ -32,9 +34,12 @@ func main() {
 	if recraftAPIKey != "" {
 		log.Printf("Recraft API key loaded successfully (length: %d)", len(recraftAPIKey))
 	}
+	if claudeAPIKey != "" {
+		log.Printf("Claude API key loaded successfully (length: %d)", len(claudeAPIKey))
+	}
 
 	// 初始化服务管理器
-	serviceManager := upstream.NewServiceManager(svgioAPIKey, recraftAPIKey)
+	serviceManager := upstream.NewServiceManager(svgioAPIKey, recraftAPIKey, claudeAPIKey, claudeBaseURL)
 	log.Printf("Service manager initialized with available providers")
 
 	// 初始化翻译服务
@@ -64,6 +69,13 @@ func main() {
 		log.Printf("Recraft routes registered")
 	}
 
+	// 注册路由处理器 - Claude 提供商
+	if claudeAPIKey != "" {
+		mux.HandleFunc("/v1/images/claude/svg", handlers.ClaudeSVGHandler(serviceManager, translateService))
+		mux.HandleFunc("/v1/images/claude", handlers.ClaudeImageHandler(serviceManager, translateService))
+		log.Printf("Claude routes registered")
+	}
+
 	// 通用路由
 	mux.HandleFunc("/health", handlers.HealthHandler())
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -85,6 +97,10 @@ func main() {
 	if recraftAPIKey != "" {
 		log.Printf("  - POST /v1/images/recraft/svg (Recraft - direct SVG download)")
 		log.Printf("  - POST /v1/images/recraft     (Recraft - JSON metadata)")
+	}
+	if claudeAPIKey != "" {
+		log.Printf("  - POST /v1/images/claude/svg  (Claude - direct SVG download)")
+		log.Printf("  - POST /v1/images/claude      (Claude - JSON metadata)")
 	}
 	log.Printf("  - GET  /health             (Health check)")
 
