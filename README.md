@@ -1,253 +1,360 @@
-# SVG 生成服务 - 重构版本 + 翻译功能
+# SVG 生成服务 - 多Provider架构
 
-## 🆕 新增功能：自动翻译
+## 🎯 项目概述
 
-支持中文提示词自动翻译为英文！当检测到中文字符时，会先调用 OpenAI API 进行翻译，然后使用翻译后的英文提示词生成图像。
+基于Go语言的高性能SVG图像生成服务，支持多个AI图像生成Provider，采用模块化架构设计。
 
-### 翻译功能特点：
-- 🧠 智能检测：自动识别中文字符
-- 🔄 实时翻译：使用 OpenAI API 将中文翻译为英文
-- 🚀 无缝集成：翻译失败不影响图像生成流程
-- 📊 透明信息：响应中包含原文、译文和翻译状态
-- ⏭️ 可跳过：支持 `skip_translate` 参数强制跳过翻译 
+## ✨ 核心特性
 
-## 项目结构
+### 🔄 多Provider支持
+- **SVG.IO**: 专业SVG生成 + 自动翻译功能 
+- **Recraft**: 中文原生支持 + 无背景优化
+- **Claude**: AI代码生成 + 智能SVG创作
+
+### 🌍 智能翻译
+- 🧠 **智能检测**: 自动识别中文字符
+- 🔄 **实时翻译**: OpenAI API驱动的中英翻译
+- 🚀 **无缝集成**: 翻译失败不影响生成流程
+- 📊 **透明信息**: 完整的翻译状态反馈
+- ⏭️ **可选跳过**: 支持`skip_translate`参数
+
+### 🏗️ 架构优势
+- **策略模式**: 动态Provider切换
+- **适配器模式**: 统一不同API接口
+- **高并发**: Goroutine池 + 连接复用
+- **容错设计**: 优雅降级 + 错误隔离 
+
+## 📁 项目结构
 
 ```
 Svg_demo/
-├── main.go        # 主入口，服务启动和路由注册
-├── types.go       # 数据类型定义（增加翻译字段）
-├── config.go      # 配置常量
-├── handlers.go    # HTTP 请求处理器（集成翻译逻辑）
-├── upstream.go    # 上游 API 客户端
-├── client.go      # HTTP 客户端工具
-├── utils.go       # 工具函数和中间件
-├── translate.go   # 🆕 翻译服务模块
-├── test_translation.sh # 🆕 翻译功能测试脚本
-├── .env.example   # 环境变量示例
-└── API_DOC.md     # API 文档（更新翻译功能）
+├── cmd/                    # 应用程序入口
+├── internal/              # 内部模块
+│   ├── client/           # HTTP客户端工具
+│   ├── config/           # 配置管理
+│   ├── handlers/         # HTTP请求处理器
+│   ├── translate/        # 翻译服务模块
+│   ├── types/           # 数据类型定义
+│   └── upstream/        # Provider适配器
+├── pkg/                  # 公共工具包
+│   └── utils/           # 工具函数
+├── scripts/             # 脚本文件
+├── docs/               # 文档目录
+├── main.go             # 服务启动入口
+├── go.mod              # Go模块定义
+└── .env.example        # 环境变量示例
 ```
 
-## 模块说明
+## 🧩 模块说明
 
-### main.go
-- 服务启动入口
-- 环境变量加载
-- 路由注册
-- HTTP 服务器启动
+### 核心模块
 
-### types.go
-- API 请求响应类型定义
-- 上游 API 类型定义
-- 错误响应类型
+#### `main.go`
+- 服务启动入口点
+- 环境变量加载和验证
+- 多Provider服务管理器初始化
+- HTTP路由注册和服务启动
 
-### config.go
-- API 端点配置
-- 服务常量定义
+#### `internal/handlers/`
+- **统一处理器**: 模板方法模式实现
+- **Provider路由**: 支持SVG.IO、Recraft、Claude
+- **CORS支持**: 完整的跨域处理
+- **错误处理**: 统一的错误响应格式
 
-### handlers.go
-- `/v1/images/svg` - SVG 文件生成和下载
-- `/v1/images` - 图像元数据生成
-- `/ping` - 健康检查
-- `/download` - URL 代理下载
+#### `internal/upstream/`
+- **ServiceManager**: Provider策略管理器
+- **SVGIOService**: SVG.IO API适配器
+- **RecraftService**: Recraft API适配器 + 背景优化
+- **ClaudeService**: Claude AI适配器 + 智能提示
 
-### upstream.go
-- SVG.IO API 客户端
-- 上游请求处理和响应解析
+#### `internal/translate/`
+- **OpenAI集成**: GPT模型翻译服务
+- **中文检测**: Unicode字符识别算法
+- **容错机制**: 翻译失败时优雅降级
 
-### client.go
-- 通用文件下载客户端
-- HTTP 请求工具
+#### `internal/types/`
+- **统一数据模型**: 跨Provider标准化
+- **API契约**: 请求/响应结构定义
+- **Provider枚举**: 类型安全的Provider选择
 
-### translate.go
-- OpenAI API 翻译服务实现
-- 中文字符检测算法
-- 翻译错误处理和降级策略
+### 工具模块
 
-### test_translation.sh
-- 翻译功能自动化测试脚本
-- 验证中文翻译和英文跳过逻辑
-- 测试 SVG 和 JSON 两种响应格式
+#### `pkg/utils/`
+- **HTTP工具**: CORS、错误响应、公共头设置
+- **通用函数**: 文件处理、字符串操作
 
-## 优势
+#### `internal/client/`
+- **HTTP客户端**: 连接池、超时控制
+- **文件下载**: 流式处理、内存优化
 
-1. **模块化**: 代码按功能拆分，便于维护
-2. **单一职责**: 每个文件负责特定功能
-3. **易扩展**: 新功能可以轻松添加到对应模块
-4. **易测试**: 模块化便于单元测试
-5. **可读性**: 代码结构清晰，易于理解
+#### `internal/config/`
+- **配置管理**: API端点、常量定义
+- **环境适配**: 开发/生产环境支持
 
-## 运行方式
+## 🚀 快速开始
 
+### 环境要求
+- **Go 1.24+**
+- **至少一个Provider API Key**
+- **OpenAI API Key** (可选，用于翻译功能)
+
+### 安装配置
+
+1. **克隆项目**
 ```bash
-# 编译
-go build .
-
-# 运行
-./Svg_demo
-
-# 或直接运行
-go run .
+git clone <repository-url>
+cd Svg_demo
 ```
 
-## 功能保持不变
-
-重构后所有 API 功能和行为保持完全一致：
-- `/v1/images/svg` - 直接返回 SVG 文件
-- `/v1/images` - 返回图像元数据和 URL
-- `/ping` - 健康检查
-- `/download?url=` - URL 代理下载
-
-## 环境要求
-
-- Go 1.19+
-- `.env` 文件包含 `SVGIO_API_KEY`
-- 🆕 `.env` 文件包含 `OPENAI_API_KEY`（可选，用于翻译功能）
-
-## 使用示例
-
-### 中文输入自动翻译
+2. **配置环境变量**
 ```bash
-# JSON 响应
+cp .env.example .env
+# 编辑 .env 文件，配置API密钥
+```
+
+3. **安装依赖**
+```bash
+go mod download
+```
+
+4. **启动服务**
+```bash
+go run main.go
+```
+
+### 环境变量说明
+
+```bash
+# SVG.IO Provider (支持翻译)
+SVGIO_API_KEY=your_svgio_api_key_here
+
+# Recraft Provider (中文原生)
+RECRAFT_API_KEY=your_recraft_api_key_here
+RECRAFT_API_URL=https://external.api.recraft.ai
+
+# Claude Provider (AI代码生成)
+CLAUDE_API_KEY=your_claude_api_key_here  
+CLAUDE_BASE_URL=https://api.qnaigc.com/v1/
+
+# 翻译服务 (可选)
+OPENAI_API_KEY=your_openai_api_key_here
+```
+
+## 🎨 Provider特性对比
+
+| Provider | 语言支持 | 特色功能 | 适用场景 |
+|----------|----------|----------|----------|
+| **SVG.IO** | 英文 + 自动翻译 | 专业SVG生成 | 高质量矢量图标 |
+| **Recraft** | 中文原生支持 | 无背景优化 | 中文创作、透明背景 |
+| **Claude** | 多语言 | AI代码生成 | 复杂SVG、编程创作 |
+
+## 💡 使用示例
+
+### 🔸 SVG.IO Provider (自动翻译)
+
+```bash
+# 中文输入 - JSON响应
 curl -X POST http://localhost:8080/v1/images \
   -H 'Content-Type: application/json' \
-  -d '{"prompt": "一只可爱的卡通狐狸", "style": "卡通"}'
+  -d '{"prompt": "一只可爱的卡通狐狸", "style": "FLAT_VECTOR"}'
 
-# 直接下载 SVG
+# 中文输入 - 直接下载SVG
 curl -X POST http://localhost:8080/v1/images/svg \
   -H 'Content-Type: application/json' \
   -d '{"prompt": "简约的猫头鹰图标"}' \
   -o owl.svg
-```
 
-### 跳过翻译
-```bash
+# 英文输入 - 跳过翻译
 curl -X POST http://localhost:8080/v1/images \
   -H 'Content-Type: application/json' \
   -d '{
     "prompt": "A cute cartoon fox",
-    "style": "cartoon",
+    "style": "FLAT_VECTOR",
     "skip_translate": true
   }'
 ```
 
-### 运行测试脚本
+### 🔸 Recraft Provider (中文原生)
+
 ```bash
-# 确保服务运行中
-go run . &
+# 中文创作 - 自动无背景
+curl -X POST http://localhost:8080/v1/images/recraft/svg \
+  -H 'Content-Type: application/json' \
+  -d '{"prompt": "极简主义的山峰图标", "style": "minimalism"}' \
+  -o mountain.svg
 
-# 运行翻译功能测试
-./test_translation.sh
+# JSON元数据
+curl -X POST http://localhost:8080/v1/images/recraft \
+  -H 'Content-Type: application/json' \
+  -d '{"prompt": "科技感的机器人头像", "model": "recraftv3"}'
 ```
 
-Base URL: `http://localhost:8080`
+### 🔸 Claude Provider (AI代码生成)
 
-提供能力:
-1. 生成图片并返回元数据 (含 SVG/PNG 外链)：`POST /v1/images`
-2. 直接生成并返回 SVG 文件（二进制响应，自动下载）：`POST /v1/images/svg`
-3. 代理下载已有 SVG：`GET /v1/download?url=...`
+```bash
+# AI智能SVG生成
+curl -X POST http://localhost:8080/v1/images/claude/svg \
+  -H 'Content-Type: application/json' \
+  -d '{"prompt": "Create a responsive SVG logo with geometric patterns"}' \
+  -o logo.svg
 
-环境变量:
-- `SVGIO_API_KEY` (必需) 上游 svg.io 的 Bearer Token
+# 复杂图形创作
+curl -X POST http://localhost:8080/v1/images/claude \
+  -H 'Content-Type: application/json' \
+  -d '{"prompt": "Design a data visualization chart in SVG format"}'
+```
 
-所有 JSON 响应使用 UTF-8 编码；除 `/v1/images/svg` 与 `/v1/download`（可能直接返回 `image/svg+xml`）。
+### 🔸 健康检查
 
----
-## 错误响应统一格式
+```bash
+curl http://localhost:8080/health
+```
+
+## 🔗 API 文档
+
+**Base URL**: `http://localhost:8080`
+
+### 📋 可用端点
+
+| Provider | SVG下载端点 | JSON元数据端点 | 特色 |
+|----------|-------------|----------------|------|
+| **SVG.IO** | `POST /v1/images/svg`<br>`POST /v1/images/svgio` | `POST /v1/images` | 自动翻译 |
+| **Recraft** | `POST /v1/images/recraft/svg` | `POST /v1/images/recraft` | 中文原生 |
+| **Claude** | `POST /v1/images/claude/svg` | `POST /v1/images/claude` | AI代码生成 |
+| **通用** | - | `GET /health` | 健康检查 |
+
+### 📝 请求格式
+
+**通用请求体**:
 ```json
 {
-  "code": "upstream_error",
-  "message": "failed to generate image",
-  "details": "可选，额外调试信息"
+  "prompt": "图像描述文本",
+  "negative_prompt": "不想要的元素",
+  "style": "风格标签",
+  "skip_translate": false,
+  "provider": "auto"
 }
 ```
-常见 code:
-| code | 含义 |
-|------|------|
-| invalid_json | 请求体 JSON 解析失败 |
-| invalid_argument | 参数非法（如 prompt 过短） |
-| method_not_allowed | HTTP 方法不支持 |
-| upstream_error | 上游生成失败/状态码>=300 |
-| download_error | 下载失败 |
-| missing_parameter | 缺少必要查询参数 |
-| invalid_url | URL 不合法 |
 
----
-## 1. 生成图片 (返回元数据)
-`POST /v1/images`
-
-请求 Body:
-```json
-{
-  "prompt": "A minimalist fox head vector logo",
-  "negative_prompt": "text, watermark",
-  "style": "FLAT_VECTOR"
-}
-```
-字段说明:
+**字段说明**:
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| prompt | string | 是 | 最少 3 字符 |
-| negative_prompt | string | 是 | 反向提示词 |
-| style | string | 否 | 样式标签 |
-| format | string | 否 | 预留，当前忽略 |
+| `prompt` | string | ✅ | 图像描述，最少3字符 |
+| `negative_prompt` | string | ⬜ | 反向提示词 |
+| `style` | string | ⬜ | 风格标签 |
+| `skip_translate` | boolean | ⬜ | 跳过翻译(仅SVG.IO) |
+| `model` | string | ⬜ | 模型选择(Recraft) |
+| `size` | string | ⬜ | 图像尺寸(Recraft) |
 
-成功响应 200:
+### 📤 响应格式
+
+**JSON元数据响应**:
 ```json
 {
   "id": "img_xxx",
   "prompt": "A minimalist fox head vector logo",
   "negative_prompt": "text, watermark",
-  "style": "flat",
-  "svg_url": "https://cdn.svg.io/generated/abc123.svg",
-  "png_url": "https://cdn.svg.io/generated/abc123.png",
+  "style": "FLAT_VECTOR",
+  "svg_url": "https://cdn.provider.com/abc123.svg",
+  "png_url": "https://cdn.provider.com/abc123.png",
   "width": 512,
   "height": 512,
-  "created_at": "2025-08-13T09:11:22Z"
+  "created_at": "2025-08-15T09:11:22Z",
+  "provider": "svgio",
+  "original_prompt": "简约的狐狸头标志",
+  "translated_prompt": "A minimalist fox head logo", 
+  "was_translated": true
 }
 ```
 
-cURL 示例:
-```bash
-curl -X POST http://localhost:8080/v1/images \
-  -H 'Content-Type: application/json' \
-  -d '{"prompt":"A minimalist fox logo","style":"flat"}'
+**SVG直接下载响应**:
+- **Content-Type**: `image/svg+xml`
+- **Content-Disposition**: `attachment; filename="<id>.svg"`
+- **Headers**: `X-Image-Id`, `X-Image-Width`, `X-Image-Height`, `X-Provider`
+
+### ⚠️ 错误处理
+
+**统一错误响应格式**:
+```json
+{
+  "code": "error_type",
+  "message": "用户友好的错误描述", 
+  "details": "可选的调试信息"
+}
 ```
 
----
-## 2. 直接生成并返回 SVG
-`POST /v1/images/svg`
+**常见错误码**:
+| Code | HTTP状态 | 含义 |
+|------|----------|------|
+| `invalid_json` | 400 | 请求体JSON解析失败 |
+| `invalid_argument` | 400 | 参数非法(如prompt过短) |
+| `method_not_allowed` | 405 | HTTP方法不支持 |
+| `upstream_error` | 502 | Provider API调用失败 |
+| `parse_error` | 500 | 响应解析失败 |
+| `timeout` | 504 | 请求超时 |
 
-请求 Body 同上。
+## 🏗️ 架构特点
 
-响应:
-- Headers:
-  - `Content-Type: image/svg+xml`
-  - `Content-Disposition: attachment; filename="<id>.svg"`
-  - `X-Image-Id`, `X-Image-Width`, `X-Image-Height`
-- Body: SVG 文本
+### 设计模式应用
+- **🎯 策略模式**: 多Provider动态切换
+- **🔧 适配器模式**: 统一不同API接口
+- **📋 模板方法**: 标准化请求处理流程
+- **🏭 工厂模式**: Provider实例创建管理
 
-cURL:
+### 性能优化
+- **⚡ 连接复用**: HTTP连接池管理
+- **🔄 并发处理**: Goroutine异步处理
+- **⏱️ 超时控制**: 分层超时保护机制
+- **🛡️ 容错设计**: 优雅降级策略
+
+### 扩展性设计
+- **🔌 插件化**: 新Provider易于接入
+- **⚙️ 配置驱动**: 环境变量灵活配置
+- **🧪 测试友好**: 接口抽象便于Mock
+- **📊 监控就绪**: 预留指标采集点
+
+## 🔮 路线图
+
+### v1.1 (计划中)
+- [ ] 批量生成API
+- [ ] 图像缓存机制
+- [ ] 限流和防护
+- [ ] 监控指标采集
+
+### v1.2 (规划中)  
+- [ ] 微服务架构拆分
+- [ ] 分布式任务队列
+- [ ] 图像风格迁移
+- [ ] WebSocket实时推送
+
+## 🤝 贡献指南
+
+欢迎提交Issue和Pull Request！
+
+### 开发环境setup
 ```bash
-curl -X POST http://localhost:8080/v1/images/svg \
-  -H 'Content-Type: application/json' \
-  -d '{"prompt":"Geometric owl emblem","style":"line"}' \
-  -o owl.svg
+# 克隆仓库
+git clone <repo-url>
+cd Svg_demo
+
+# 安装依赖
+go mod download
+
+# 运行测试
+go test ./...
+
+# 启动开发服务
+go run main.go
 ```
 
+### 新Provider接入
+1. 在`internal/upstream/`中实现Provider Service
+2. 实现`UpstreamService`接口
+3. 在`ServiceManager`中注册
+4. 添加对应的Handler路由
+5. 更新文档和测试
 
----
-## 前端交互建议
-| 按钮 | 调用 | 返回 | 说明 |
-|------|------|------|------|
-| 生成 PNG | POST /v1/images | JSON | 使用 `png_url` 展示或下载 |
-| 生成 SVG | POST /v1/images/svg | SVG | 浏览器自动下载 |
-| 重新下载 SVG | GET /v1/download?url= | SVG | 统一代理避免跨域/失效 |
+## 📄 许可证
 
-
-## 未来可扩展
-- 异步任务队列 (返回 task_id 轮询状态)
-- PNG 直接流式返回接口 `/v1/images/png`
-- 生成参数增加 size / seed / color palette
-- 缓存与速率限制
+MIT License - 详见 [LICENSE](LICENSE) 文件
 
