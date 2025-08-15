@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  svg-generator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: svg-generator
+    ports:
+      - "8080:8080"
+    environment:
+      # API Keys - 从环境变量或 .env 文件读取
+      - SVGIO_API_KEY=${SVGIO_API_KEY}
+      - RECRAFT_API_KEY=${RECRAFT_API_KEY}
+      - CLAUDE_API_KEY=${CLAUDE_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      
+      # Configuration
+      - CONFIG_PATH=/app/config.yaml
+      - GIN_MODE=release
+      - PORT=8080
+      
+      # Claude Base URL (可选)
+      - CLAUDE_BASE_URL=${CLAUDE_BASE_URL:-https://api.qnaigc.com/v1/}
+    
+    volumes:
+      # 挂载配置文件（可选，用于运行时配置更新）
+      - ./config.yaml:/app/config.yaml:ro
+      
+      # 日志目录（可选）
+      - ./logs:/app/logs
+    
+    restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # 资源限制
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  # 可选：添加 Redis 缓存（用于缓存翻译结果等）
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: svg-generator-redis
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis_data:/data
+  #   restart: unless-stopped
+
+# volumes:
+#   redis_data:

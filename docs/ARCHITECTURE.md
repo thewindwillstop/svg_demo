@@ -143,10 +143,10 @@ graph TB
 
 ### 2. 业务逻辑层 (Business Logic Layer)
 ```go
-// 位置: internal/upstream/
+// 位置: internal/service/
 // 职责: Provider管理、业务逻辑处理
 
-├── upstream.go          // ServiceManager核心
+├── service.go          // ServiceManager核心
 ├── svgio.go            // SVG.IO实现
 ├── recraft.go          // Recraft实现
 ├── claude.go           // Claude实现
@@ -222,7 +222,7 @@ type ImageGenerator interface {
 
 ```go
 func generateHandler(
-    serviceManager *upstream.ServiceManager,
+    serviceManager *service.ServiceManager,
     translateService translate.Service, 
     provider types.Provider,
     directSVG bool
@@ -392,9 +392,8 @@ API Version: v1
 ```yaml
 Endpoints:
   # SVG.IO Provider
-  - POST /v1/images/svg        # 直接下载SVG (SVG.IO)
-  - POST /v1/images/svgio      # 直接下载SVG (SVG.IO) 
-  - POST /v1/images            # JSON元数据 (SVG.IO)
+  - POST /v1/images/svgio/svg  # 直接下载SVG (SVG.IO)
+  - POST /v1/images/svgio      # JSON元数据 (SVG.IO)
   
   # Recraft Provider  
   - POST /v1/images/recraft/svg # 直接下载SVG (Recraft)
@@ -578,7 +577,7 @@ func NewServiceManager(..., newProvider *NewProviderService) *ServiceManager {
 }
 
 // 3. 添加Handler
-func NewProviderHandler(serviceManager *upstream.ServiceManager, translateService translate.Service) http.HandlerFunc {
+func NewProviderHandler(serviceManager *service.ServiceManager, translateService translate.Service) http.HandlerFunc {
     return generateHandler(serviceManager, translateService, types.ProviderNew, true)
 }
 ```
