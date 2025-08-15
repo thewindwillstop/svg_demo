@@ -11,7 +11,7 @@ import (
 
 // HTTPClient is a global HTTP client with timeout
 var HTTPClient = &http.Client{
-	Timeout: 10 * time.Second,
+	Timeout: 60 * time.Second,
 }
 
 // DownloadFile downloads a file from the given URL

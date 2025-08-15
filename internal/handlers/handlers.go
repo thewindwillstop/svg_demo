@@ -5,70 +5,97 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"net/http"
+	"strconv"
+	"time"
+
 	"miniSvg/internal/client"
 	"miniSvg/internal/translate"
 	"miniSvg/internal/types"
 	"miniSvg/internal/upstream"
 	"miniSvg/pkg/utils"
-	"net/http"
-	"strconv"
-	"time"
 )
 
-// SVGHandler SVG生成和下载处理器
-func SVGHandler(apiKey string, translateService translate.Service) http.HandlerFunc {
+// SVGHandler SVG生成和下载处理器 (使用 SVG.IO)
+func SVGHandler(serviceManager *upstream.ServiceManager, translateService translate.Service) http.HandlerFunc {
+	return generateHandler(serviceManager, translateService, types.ProviderSVGIO, true)
+}
+
+// RecraftSVGHandler Recraft SVG生成和下载处理器
+func RecraftSVGHandler(serviceManager *upstream.ServiceManager, translateService translate.Service) http.HandlerFunc {
+	return generateHandler(serviceManager, translateService, types.ProviderRecraft, true)
+}
+
+// ImageHandler JSON 元数据接口处理器 (使用 SVG.IO)
+func ImageHandler(serviceManager *upstream.ServiceManager, translateService translate.Service) http.HandlerFunc {
+	return generateHandler(serviceManager, translateService, types.ProviderSVGIO, false)
+}
+
+// RecraftImageHandler Recraft JSON 元数据接口处理器
+func RecraftImageHandler(serviceManager *upstream.ServiceManager, translateService translate.Service) http.HandlerFunc {
+	return generateHandler(serviceManager, translateService, types.ProviderRecraft, false)
+}
+
+// generateHandler 通用图像生成处理器
+func generateHandler(serviceManager *upstream.ServiceManager, translateService translate.Service, provider types.Provider, directSVG bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("[SVG] Request from %s: %s %s", r.RemoteAddr, r.Method, r.URL.Path)
+		providerName := string(provider)
+		log.Printf("[%s] Request from %s: %s %s", providerName, r.RemoteAddr, r.Method, r.URL.Path)
 
 		if r.Method != http.MethodPost {
-			log.Printf("[SVG] Method not allowed: %s", r.Method)
+			log.Printf("[%s] Method not allowed: %s", providerName, r.Method)
 			utils.WriteError(w, http.StatusMethodNotAllowed, "method_not_allowed", "only POST is allowed", nil)
 			return
 		}
+
 		var req types.GenerateRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			log.Printf("[SVG] JSON decode error: %v", err)
+			log.Printf("[%s] JSON decode error: %v", providerName, err)
 			utils.WriteError(w, http.StatusBadRequest, "invalid_json", "invalid request body", err.Error())
 			return
 		}
-		log.Printf("[SVG] Request parsed - prompt: %q, style: %q", req.Prompt, req.Style)
+
+		// 强制设置提供商
+		req.Provider = provider
+
+		log.Printf("[%s] Request parsed - prompt: %q, style: %q, provider: %s", providerName, req.Prompt, req.Style, req.Provider)
 
 		if len(req.Prompt) < 3 {
-			log.Printf("[SVG] Prompt too short: %d chars", len(req.Prompt))
+			log.Printf("[%s] Prompt too short: %d chars", providerName, len(req.Prompt))
 			utils.WriteError(w, http.StatusBadRequest, "invalid_argument", "prompt must be at least 3 characters", nil)
 			return
 		}
 
-		// 翻译处理
+		// 翻译处理 (仅对 SVG.IO 提供商进行翻译，Recraft 支持中文)
 		originalPrompt := req.Prompt
 		translatedPrompt := req.Prompt
 		wasTranslated := false
 
-		if !req.SkipTranslate && translateService != nil {
-			translateCtx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+		if !req.SkipTranslate && translateService != nil && provider == types.ProviderSVGIO {
+			translateCtx, cancel := context.WithTimeout(r.Context(), 45*time.Second)
 			defer cancel()
 
 			translated, err := translateService.Translate(translateCtx, req.Prompt)
 			if err != nil {
-				log.Printf("[SVG] Translation failed: %v", err)
+				log.Printf("[%s] Translation failed: %v", providerName, err)
 				// 翻译失败时使用原文继续处理，不中断流程
 			} else if translated != req.Prompt {
 				translatedPrompt = translated
 				wasTranslated = true
-				log.Printf("[SVG] Prompt translated: %q -> %q", originalPrompt, translatedPrompt)
+				log.Printf("[%s] Prompt translated: %q -> %q", providerName, originalPrompt, translatedPrompt)
 			}
 		}
 
 		// 使用翻译后的提示词
 		req.Prompt = translatedPrompt
 
-		ctx, cancel := context.WithTimeout(r.Context(), 28*time.Second)
+		ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
 		defer cancel()
 
-		log.Printf("[SVG] Calling upstream API...")
-		img, err := upstream.CallSVGIOGenerate(ctx, apiKey, req)
+		log.Printf("[%s] Calling upstream API...", providerName)
+		img, err := serviceManager.GenerateImage(ctx, req)
 		if err != nil {
-			log.Printf("[SVG] Upstream generation failed: %v", err)
+			log.Printf("[%s] Upstream generation failed: %v", providerName, err)
 			status := http.StatusBadGateway
 			if errors.Is(err, context.DeadlineExceeded) {
 				status = http.StatusGatewayTimeout
@@ -76,179 +103,87 @@ func SVGHandler(apiKey string, translateService translate.Service) http.HandlerF
 			utils.WriteError(w, status, "upstream_error", "failed to generate image", err.Error())
 			return
 		}
-		log.Printf("[SVG] Generation successful - ID: %s, SVG URL: %s", img.ID, img.SVGURL)
 
-		// 下载 SVG 内容
-		log.Printf("[SVG] Downloading SVG content from: %s", img.SVGURL)
-		svgBytes, err := client.DownloadFile(ctx, img.SVGURL)
-		if err != nil {
-			log.Printf("[SVG] Download failed: %v", err)
-			utils.WriteError(w, http.StatusBadGateway, "download_error", "failed to download generated svg", err.Error())
-			return
-		}
-		log.Printf("[SVG] Download successful - size: %d bytes", len(svgBytes))
+		log.Printf("[%s] Generation successful - ID: %s, SVG URL: %s", providerName, img.ID, img.SVGURL)
 
-		w.Header().Set("Content-Type", "image/svg+xml")
-		w.Header().Set("Content-Disposition", "attachment; filename=\""+img.ID+".svg\"")
-		// 可以附带元信息 header
-		w.Header().Set("X-Image-Id", img.ID)
-		w.Header().Set("X-Image-Width", strconv.Itoa(img.Width))
-		w.Header().Set("X-Image-Height", strconv.Itoa(img.Height))
-		// 添加翻译信息到响应头
-		if wasTranslated {
-			w.Header().Set("X-Original-Prompt", originalPrompt)
-			w.Header().Set("X-Translated-Prompt", translatedPrompt)
-			w.Header().Set("X-Was-Translated", "true")
-		}
-		utils.SetCORSHeaders(w)
-		w.WriteHeader(http.StatusOK)
-		if _, err := w.Write(svgBytes); err != nil {
-			log.Printf("[SVG] Write response error: %v", err)
-		} else {
-			log.Printf("[SVG] Response sent successfully")
-		}
-	}
-}
-
-// ImageHandler JSON 元数据接口处理器
-func ImageHandler(apiKey string, translateService translate.Service) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("[IMG] Request from %s: %s %s", r.RemoteAddr, r.Method, r.URL.Path)
-
-		var req types.GenerateRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			log.Printf("[IMG] JSON decode error: %v", err)
-			utils.WriteError(w, http.StatusBadRequest, "invalid_json", "invalid request body", err.Error())
-			return
-		}
-		log.Printf("[IMG] Request parsed - prompt: %q, style: %q", req.Prompt, req.Style)
-
-		if len(req.Prompt) < 3 {
-			log.Printf("[IMG] Prompt too short: %d chars", len(req.Prompt))
-			utils.WriteError(w, http.StatusBadRequest, "invalid_argument", "prompt must be at least 3 characters", nil)
-			return
-		}
-
-		// 翻译处理
-		originalPrompt := req.Prompt
-		translatedPrompt := req.Prompt
-		wasTranslated := false
-
-		if !req.SkipTranslate && translateService != nil {
-			translateCtx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-			defer cancel()
-
-			translated, err := translateService.Translate(translateCtx, req.Prompt)
+		if directSVG {
+			// 直接返回 SVG 文件
+			log.Printf("[%s] Downloading SVG content from: %s", providerName, img.SVGURL)
+			svgBytes, err := client.DownloadFile(ctx, img.SVGURL)
 			if err != nil {
-				log.Printf("[IMG] Translation failed: %v", err)
-				// 翻译失败时使用原文继续处理，不中断流程
-			} else if translated != req.Prompt {
-				translatedPrompt = translated
-				wasTranslated = true
-				log.Printf("[IMG] Prompt translated: %q -> %q", originalPrompt, translatedPrompt)
+				log.Printf("[%s] Download failed: %v", providerName, err)
+				utils.WriteError(w, http.StatusBadGateway, "download_error", "failed to download generated svg", err.Error())
+				return
 			}
-		}
+			log.Printf("[%s] Download successful - size: %d bytes", providerName, len(svgBytes))
 
-		// 使用翻译后的提示词
-		req.Prompt = translatedPrompt
-
-		//接口超时时间
-		ctx, cancel := context.WithTimeout(r.Context(), 28*time.Second)
-		defer cancel()
-
-		log.Printf("[IMG] Calling upstream API...")
-		img, err := upstream.CallSVGIOGenerate(ctx, apiKey, req)
-		if err != nil {
-			log.Printf("[IMG] Upstream generation failed: %v", err)
-			status := http.StatusBadGateway
-			if errors.Is(err, context.DeadlineExceeded) {
-				status = http.StatusGatewayTimeout
+			w.Header().Set("Content-Type", "image/svg+xml")
+			w.Header().Set("Content-Disposition", "attachment; filename=\""+img.ID+".svg\"")
+			// 可以附带元信息 header
+			w.Header().Set("X-Image-Id", img.ID)
+			w.Header().Set("X-Image-Width", strconv.Itoa(img.Width))
+			w.Header().Set("X-Image-Height", strconv.Itoa(img.Height))
+			w.Header().Set("X-Provider", string(provider))
+			// 添加翻译信息到响应头
+			if wasTranslated {
+				w.Header().Set("X-Original-Prompt", originalPrompt)
+				w.Header().Set("X-Translated-Prompt", translatedPrompt)
+				w.Header().Set("X-Was-Translated", "true")
 			}
-			utils.WriteError(w, status, "upstream_error", "failed to generate image", err.Error())
-			return
-		}
-		log.Printf("[IMG] Generation successful - ID: %s, PNG URL: %s", img.ID, img.PNGURL)
-
-		// 在响应中包含翻译信息
-		img.OriginalPrompt = originalPrompt
-		img.TranslatedPrompt = translatedPrompt
-		img.WasTranslated = wasTranslated
-
-		utils.WriteJSON(w, http.StatusOK, img)
-		log.Printf("[IMG] Response sent successfully")
-	}
-}
-
-// PingHandler Ping 健康检查处理器
-func PingHandler() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-		if r.Method != http.MethodGet && r.Method != http.MethodHead {
-			utils.WriteError(w, http.StatusMethodNotAllowed, "method_not_allowed", "only GET/HEAD allowed", nil)
-			return
-		}
-		resp := map[string]any{
-			"status": "ok",
-			"time":   time.Now().UTC().Format(time.RFC3339Nano),
-			"uptime": time.Since(start).String(),
-		}
-		// HEAD 不写 body
-		if r.Method == http.MethodHead {
 			utils.SetCORSHeaders(w)
 			w.WriteHeader(http.StatusOK)
-			return
+			if _, err := w.Write(svgBytes); err != nil {
+				log.Printf("[%s] Write response error: %v", providerName, err)
+			} else {
+				log.Printf("[%s] Response sent successfully", providerName)
+			}
+		} else {
+			// 返回 JSON 元数据
+			response := types.ImageResponse{
+				ID:       img.ID,
+				SVGURL:   img.SVGURL,
+				Width:    img.Width,
+				Height:   img.Height,
+				Provider: provider,
+			}
+
+			// 添加翻译信息
+			if wasTranslated {
+				response.OriginalPrompt = originalPrompt
+				response.TranslatedPrompt = translatedPrompt
+				response.WasTranslated = wasTranslated
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			utils.SetCORSHeaders(w)
+			w.WriteHeader(http.StatusOK)
+
+			if err := json.NewEncoder(w).Encode(response); err != nil {
+				log.Printf("[%s] JSON encode error: %v", providerName, err)
+			} else {
+				log.Printf("[%s] JSON response sent successfully", providerName)
+			}
 		}
-		utils.WriteJSON(w, http.StatusOK, resp)
 	}
 }
 
-// DownloadSVGHandler SVG URL 下载处理器
-func DownloadSVGHandler() http.HandlerFunc {
+// HealthHandler 健康检查处理器
+func HealthHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			utils.WriteError(w, http.StatusMethodNotAllowed, "method_not_allowed", "only GET is allowed", nil)
-			return
-		}
+		utils.SetCORSHeaders(w)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{
+			"status": "ok",
+			"time":   time.Now().Format(time.RFC3339),
+		})
+	}
+}
 
-		svgURL := r.URL.Query().Get("url")
-		if svgURL == "" {
-			utils.WriteError(w, http.StatusBadRequest, "missing_parameter", "url parameter is required", nil)
-			return
-		}
-
-		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-		defer cancel()
-
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, svgURL, nil)
-		if err != nil {
-			utils.WriteError(w, http.StatusBadRequest, "invalid_url", "invalid SVG URL", err.Error())
-			return
-		}
-
-		resp, err := client.HTTPClient.Do(req)
-		if err != nil {
-			utils.WriteError(w, http.StatusBadGateway, "download_error", "failed to download SVG", err.Error())
-			return
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode >= 300 {
-			utils.WriteError(w, http.StatusBadGateway, "upstream_error", "failed to fetch SVG from upstream", nil)
-			return
-		}
-
-		w.Header().Set("Content-Type", "image/svg+xml")
-		w.Header().Set("Content-Disposition", "attachment; filename=\"image.svg\"")
+// CORSPreflight 处理 CORS 预检请求
+func CORSPreflight() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		utils.SetCORSHeaders(w)
 		w.WriteHeader(http.StatusOK)
-
-		svgBytes, err := client.DownloadFile(ctx, svgURL)
-		if err != nil {
-			log.Printf("failed to download SVG: %v", err)
-		} else {
-			if _, err := w.Write(svgBytes); err != nil {
-				log.Printf("failed to write SVG response: %v", err)
-			}
-		}
 	}
 }
