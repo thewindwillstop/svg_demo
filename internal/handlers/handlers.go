@@ -16,58 +16,56 @@ import (
 	"svg-generator/pkg/utils"
 )
 
-// SVGHandler SVG生成和下载处理器 (使用 SVG.IO)
-func SVGHandler(serviceManager *service.ServiceManager, translateService utils.TranslateService) http.HandlerFunc {
-	return generateHandler(serviceManager, translateService, types.ProviderSVGIO, true)
+// UnifiedImageHandler 统一的图像元数据处理器 - 根据请求中的provider参数选择模型
+func UnifiedImageHandler(serviceManager *service.ServiceManager, translateService utils.TranslateService) http.HandlerFunc {
+	return unifiedGenerateHandler(serviceManager, translateService, false)
 }
 
-// RecraftSVGHandler Recraft SVG生成和下载处理器
-func RecraftSVGHandler(serviceManager *service.ServiceManager, translateService utils.TranslateService) http.HandlerFunc {
-	return generateHandler(serviceManager, translateService, types.ProviderRecraft, true)
+// UnifiedSVGHandler 统一的SVG处理器 - 根据请求中的provider参数选择模型
+func UnifiedSVGHandler(serviceManager *service.ServiceManager, translateService utils.TranslateService) http.HandlerFunc {
+	return unifiedGenerateHandler(serviceManager, translateService, true)
 }
 
-// ImageHandler JSON 元数据接口处理器 (使用 SVG.IO)
-func ImageHandler(serviceManager *service.ServiceManager, translateService utils.TranslateService) http.HandlerFunc {
-	return generateHandler(serviceManager, translateService, types.ProviderSVGIO, false)
-}
-
-// RecraftImageHandler Recraft JSON 元数据接口处理器
-func RecraftImageHandler(serviceManager *service.ServiceManager, translateService utils.TranslateService) http.HandlerFunc {
-	return generateHandler(serviceManager, translateService, types.ProviderRecraft, false)
-}
-
-// ClaudeSVGHandler Claude SVG生成和下载处理器
-func ClaudeSVGHandler(serviceManager *service.ServiceManager, translateService utils.TranslateService) http.HandlerFunc {
-	return generateHandler(serviceManager, translateService, types.ProviderClaude, true)
-}
-
-// ClaudeImageHandler Claude JSON 元数据接口处理器
-func ClaudeImageHandler(serviceManager *service.ServiceManager, translateService utils.TranslateService) http.HandlerFunc {
-	return generateHandler(serviceManager, translateService, types.ProviderClaude, false)
-}
-
-// generateHandler 通用图像生成处理器
-func generateHandler(serviceManager *service.ServiceManager, translateService utils.TranslateService, provider types.Provider, directSVG bool) http.HandlerFunc {
+// unifiedGenerateHandler 统一的图像生成处理器
+func unifiedGenerateHandler(serviceManager *service.ServiceManager, translateService utils.TranslateService, directSVG bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		providerName := string(provider)
-		log.Printf("[%s] Request from %s: %s %s", providerName, r.RemoteAddr, r.Method, r.URL.Path)
+		log.Printf("Unified handler request from %s: %s %s", r.RemoteAddr, r.Method, r.URL.Path)
 
 		if r.Method != http.MethodPost {
-			log.Printf("[%s] Method not allowed: %s", providerName, r.Method)
+			log.Printf("Method not allowed: %s", r.Method)
 			utils.WriteError(w, http.StatusMethodNotAllowed, "method_not_allowed", "only POST is allowed", nil)
 			return
 		}
 
 		var req types.GenerateRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			log.Printf("[%s] JSON decode error: %v", providerName, err)
+			log.Printf("JSON decode error: %v", err)
 			utils.WriteError(w, http.StatusBadRequest, "invalid_json", "invalid request body", err.Error())
 			return
 		}
 
-		// 强制设置提供商
-		req.Provider = provider
+		// 验证provider参数
+		if req.Provider == "" {
+			req.Provider = types.ProviderSVGIO // 默认使用SVG.IO
+		}
 
+		// 验证provider是否有效
+		validProviders := []types.Provider{types.ProviderSVGIO, types.ProviderRecraft, types.ProviderOpenAI}
+		isValidProvider := false
+		for _, p := range validProviders {
+			if req.Provider == p {
+				isValidProvider = true
+				break
+			}
+		}
+
+		if !isValidProvider {
+			log.Printf("Invalid provider: %s", req.Provider)
+			utils.WriteError(w, http.StatusBadRequest, "invalid_provider", "provider must be one of: svgio, recraft, openai", nil)
+			return
+		}
+
+		providerName := string(req.Provider)
 		log.Printf("[%s] Request parsed - prompt: %q, style: %q, provider: %s", providerName, req.Prompt, req.Style, req.Provider)
 
 		if len(req.Prompt) < 3 {
@@ -76,12 +74,12 @@ func generateHandler(serviceManager *service.ServiceManager, translateService ut
 			return
 		}
 
-		// 翻译处理 (仅对 SVG.IO 提供商进行翻译，Recraft 和 Claude 支持中文)
+		// 翻译处理 (仅对 SVG.IO 提供商进行翻译，Recraft 和 OpenAI 支持中文)
 		originalPrompt := req.Prompt
 		translatedPrompt := req.Prompt
 		wasTranslated := false
 
-		if !req.SkipTranslate && translateService != nil && provider == types.ProviderSVGIO {
+		if !req.SkipTranslate && translateService != nil && req.Provider == types.ProviderSVGIO {
 			translateCtx, cancel := context.WithTimeout(r.Context(), 45*time.Second)
 			defer cancel()
 
@@ -150,7 +148,7 @@ func generateHandler(serviceManager *service.ServiceManager, translateService ut
 			w.Header().Set("X-Image-Id", img.ID)
 			w.Header().Set("X-Image-Width", strconv.Itoa(img.Width))
 			w.Header().Set("X-Image-Height", strconv.Itoa(img.Height))
-			w.Header().Set("X-Provider", string(provider))
+			w.Header().Set("X-Provider", string(req.Provider))
 			// 添加翻译信息到响应头
 			if wasTranslated {
 				w.Header().Set("X-Original-Prompt", originalPrompt)
@@ -171,7 +169,7 @@ func generateHandler(serviceManager *service.ServiceManager, translateService ut
 				SVGURL:   img.SVGURL,
 				Width:    img.Width,
 				Height:   img.Height,
-				Provider: provider,
+				Provider: req.Provider,
 			}
 
 			// 添加翻译信息

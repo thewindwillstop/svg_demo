@@ -33,8 +33,6 @@ type svgioGenerateReq struct {
 	Prompt           string  `json:"prompt"`
 	NegativePrompt   *string `json:"negativePrompt,omitempty"`
 	Style            *string `json:"style,omitempty"`
-	InitialImage     *string `json:"initialImage,omitempty"`
-	InitialImageType *string `json:"initialImageType,omitempty"`
 }
 
 // svgioGenerateResp SVG.IO API生成响应
@@ -61,8 +59,6 @@ func (s *SVGIOService) GenerateImage(ctx context.Context, req types.GenerateRequ
 		Prompt:           req.Prompt,
 		NegativePrompt:   &req.NegativePrompt,
 		Style:            &req.Style,
-		InitialImage:     nil,
-		InitialImageType: nil,
 	}
 	if req.NegativePrompt == "" {
 		defaultNegativePrompt := "NULL"

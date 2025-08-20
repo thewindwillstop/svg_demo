@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"errors"
-
 	"svg-generator/internal/config"
 	"svg-generator/internal/types"
 )
@@ -17,14 +16,14 @@ type Provider interface {
 type ServiceManager struct {
 	svgioService   Provider
 	recraftService Provider
-	claudeService  Provider
+	openaiService  Provider
 }
 
 // NewServiceManager 创建服务管理器
-func NewServiceManager(svgioAPIKey, recraftAPIKey, claudeAPIKey, claudeBaseURL string) *ServiceManager {
+func NewServiceManager(svgioAPIKey, recraftAPIKey, openaiAPIKey string) *ServiceManager {
 	var svgioService *SVGIOService
 	var recraftService *RecraftService
-	var claudeService *ClaudeService
+	var openaiService *OpenAIService
 
 	if svgioAPIKey != "" && config.AppConfig.Providers.SVGIO.Enabled {
 		svgioService = NewSVGIOService(svgioAPIKey)
@@ -34,14 +33,14 @@ func NewServiceManager(svgioAPIKey, recraftAPIKey, claudeAPIKey, claudeBaseURL s
 		recraftService = NewRecraftService(recraftAPIKey)
 	}
 
-	if claudeAPIKey != "" && config.AppConfig.Providers.Claude.Enabled {
-		claudeService = NewClaudeService(claudeAPIKey, claudeBaseURL)
+	if openaiAPIKey != "" && config.AppConfig.Providers.OpenAI.Enabled {
+		openaiService = NewOpenAIService(openaiAPIKey, config.AppConfig.Providers.OpenAI.BaseURL)
 	}
 
 	return &ServiceManager{
 		svgioService:   svgioService,
 		recraftService: recraftService,
-		claudeService:  claudeService,
+		openaiService:  openaiService,
 	}
 }
 
@@ -52,8 +51,8 @@ func (sm *ServiceManager) RegisterProvider(providerType types.Provider, provider
 		sm.svgioService = provider
 	case types.ProviderRecraft:
 		sm.recraftService = provider
-	case types.ProviderClaude:
-		sm.claudeService = provider
+	case types.ProviderOpenAI:
+		sm.openaiService = provider
 	}
 }
 
@@ -64,8 +63,8 @@ func (sm *ServiceManager) GetProvider(providerType types.Provider) Provider {
 		return sm.svgioService
 	case types.ProviderRecraft:
 		return sm.recraftService
-	case types.ProviderClaude:
-		return sm.claudeService
+	case types.ProviderOpenAI:
+		return sm.openaiService
 	default:
 		return sm.svgioService // 默认返回SVGIO
 	}

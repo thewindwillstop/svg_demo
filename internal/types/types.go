@@ -8,8 +8,15 @@ type Provider string
 const (
 	ProviderSVGIO   Provider = "svgio"
 	ProviderRecraft Provider = "recraft"
-	ProviderClaude  Provider = "claude"
+	ProviderOpenAI  Provider = "openai"
 )
+
+// 错误响应类型
+type ErrorResp struct {
+	Code    string      `json:"code"`
+	Message string      `json:"message"`
+	Details interface{} `json:"details,omitempty"`
+}
 
 // API 请求和响应类型定义
 
@@ -48,20 +55,12 @@ type ImageResponse struct {
 	WasTranslated    bool   `json:"was_translated"`              // 是否进行了翻译
 }
 
-type ErrorResp struct {
-	Code    string      `json:"code"`
-	Message string      `json:"message"`
-	Details interface{} `json:"details,omitempty"`
-}
-
 // SVG.IO 上游 API 相关类型
 
 type SVGIOGenerateReq struct {
-	Prompt           string `json:"prompt"`
-	NegativePrompt   string `json:"negativePrompt"`
-	Style            string `json:"style,omitempty"`
-	InitialImage     any    `json:"initialImage"`     // 必须传 null，否则会被序列化为 ""
-	InitialImageType any    `json:"initialImageType"` // 同上
+	Prompt         string `json:"prompt"`
+	NegativePrompt string `json:"negativePrompt"`
+	Style          string `json:"style,omitempty"`
 }
 
 type SVGIOGenerateItem struct {
@@ -119,34 +118,36 @@ type RecraftVectorizeResp struct {
 	Image RecraftImageData `json:"image"`
 }
 
-// Claude API 相关类型
+// OpenAI API 相关类型 (支持所有OpenAI兼容的模型)
 
-type ClaudeMessage struct {
+type OpenAIMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
 }
 
-type ClaudeGenerateReq struct {
+type OpenAIGenerateReq struct {
 	Model       string          `json:"model"`
-	Messages    []ClaudeMessage `json:"messages"`
+	Messages    []OpenAIMessage `json:"messages"`
 	MaxTokens   int             `json:"max_tokens"`
 	Temperature float64         `json:"temperature,omitempty"`
-	System      string          `json:"system,omitempty"`
+	Stream      bool            `json:"stream,omitempty"`
 }
 
-type ClaudeGenerateResp struct {
+type OpenAIGenerateResp struct {
 	ID      string `json:"id"`
-	Type    string `json:"type"`
-	Role    string `json:"role"`
-	Content []struct {
-		Type string `json:"type"`
-		Text string `json:"text"`
-	} `json:"content"`
-	Model        string `json:"model"`
-	StopReason   string `json:"stop_reason"`
-	StopSequence string `json:"stop_sequence"`
-	Usage        struct {
-		InputTokens  int `json:"input_tokens"`
-		OutputTokens int `json:"output_tokens"`
+	Object  string `json:"object"`
+	Model   string `json:"model"`
+	Choices []struct {
+		Index   int `json:"index"`
+		Message struct {
+			Role    string `json:"role"`
+			Content string `json:"content"`
+		} `json:"message"`
+		FinishReason string `json:"finish_reason"`
+	} `json:"choices"`
+	Usage struct {
+		PromptTokens     int `json:"prompt_tokens"`
+		CompletionTokens int `json:"completion_tokens"`
+		TotalTokens      int `json:"total_tokens"`
 	} `json:"usage"`
 }
