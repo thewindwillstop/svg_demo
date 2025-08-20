@@ -9,7 +9,7 @@
 ### 🔄 多Provider支持
 - **SVG.IO**: 专业SVG生成 + 自动翻译功能 
 - **Recraft**: 中文原生支持 + 无背景优化
-- **Claude**: AI代码生成 + 智能SVG创作
+- **OpenAI**: AI驱动的智能SVG生成与优化
 
 ### 🌍 智能翻译
 - 🧠 **智能检测**: 自动识别中文字符
@@ -35,14 +35,33 @@
 ```
 svg-generator/
 ├── internal/              # 内部模块
-│   ├── config/           # 配置管理和加载
+│   ├── config/           # 配置管理
+│   │   ├── config.go     # 配置结构定义
+│   │   └── load.go       # 配置加载逻辑
 │   ├── handlers/         # HTTP请求处理器
+│   │   └── handlers.go   # 统一请求处理
 │   ├── service/          # Provider服务实现
+│   │   ├── svgio.go      # SVG.IO服务实现
+│   │   ├── recraft.go    # Recraft服务实现
+│   │   ├── openai.go     # OpenAI服务实现
+│   │   └── upstream.go   # 上游服务管理器
 │   └── types/           # 数据类型定义
+│       └── types.go      # 通用类型和接口
 ├── pkg/                  # 公共工具包
-│   └── utils/           # 工具函数（HTTP、翻译、中间件）
+│   └── utils/           # 工具函数
+│       ├── cors.go       # CORS中间件
+│       ├── https.go      # HTTP工具函数
+│       ├── translate.go  # 翻译服务
+│       └── utils.go      # 通用工具函数
 ├── scripts/             # 部署和管理脚本
+│   ├── docker.sh        # Docker部署脚本
+│   ├── demo_script.sh   # 演示脚本
+│   └── test_translation.sh # 翻译测试脚本
 ├── docs/               # 文档目录
+│   ├── API.md           # API文档
+│   ├── ARCHITECTURE.md  # 架构文档
+│   ├── CONFIG_GUIDE.md  # 配置指南
+│   └── DEPLOYMENT.md    # 部署文档
 ├── bin/                # 编译输出目录
 ├── main.go             # 服务启动入口
 ├── config.yaml         # 主配置文件
@@ -50,6 +69,7 @@ svg-generator/
 ├── Dockerfile          # Docker镜像构建
 ├── docker-compose.yml  # 容器编排配置
 ├── go.mod              # Go模块定义
+├── go.sum              # Go模块校验
 └── .env.example        # 环境变量示例
 ```
 
@@ -66,7 +86,8 @@ svg-generator/
 
 #### `internal/handlers/`
 - **统一处理器**: 模板方法模式实现
-- **Provider路由**: 支持SVG.IO、Recraft、Claude
+- **Provider路由**: 支持SVG.IO、Recraft、OpenAI
+- **智能翻译**: 自动中英文翻译(仅SVG.IO)
 - **CORS支持**: 完整的跨域处理
 - **错误处理**: 统一的错误响应格式
 
@@ -74,28 +95,28 @@ svg-generator/
 - **ServiceManager**: Provider策略管理器和接口抽象
 - **SVGIOService**: SVG.IO API适配器
 - **RecraftService**: Recraft API适配器 + 背景优化
-- **ClaudeService**: Claude AI适配器 + 智能提示
+- **OpenAIService**: OpenAI API适配器 + 智能生成
 - **Provider接口**: 统一的GenerateImage方法定义
 
 #### `internal/types/`
 - **统一数据模型**: 跨Provider标准化
 - **API契约**: GenerateRequest/ImageResponse结构定义
 - **Provider枚举**: 类型安全的Provider选择
-- **上游API类型**: SVG.IO、Recraft、Claude的原生API结构
+- **上游API类型**: SVG.IO、Recraft、OpenAI的原生API结构
 
 #### `internal/config/`
-- **配置加载器**: YAML配置文件解析
+- **config.go**: 配置结构体定义和工具方法
+- **load.go**: 环境变量加载和配置初始化
 - **环境适配**: 开发/生产环境支持
 - **Provider配置**: 各Provider的启用状态和参数
 
 ### 工具模块
 
 #### `pkg/utils/`
-- **HTTP工具**: CORS中间件、错误响应、公共头设置
-- **翻译服务**: OpenAI API集成的中英翻译功能
-- **中文检测**: Unicode字符识别算法
-- **文件处理**: HTTP下载、字节流处理
-- **通用函数**: 类型转换、辅助工具
+- **cors.go**: CORS中间件实现
+- **https.go**: HTTP客户端和请求工具
+- **translate.go**: OpenAI API集成的中英翻译功能，包含中文检测
+- **utils.go**: 环境变量读取、错误响应等通用工具函数
 
 ## 🚀 快速开始
 
@@ -182,7 +203,7 @@ docker-compose logs -f
 |----------|----------|----------|----------|
 | **SVG.IO** | 英文 + 自动翻译 | 专业SVG生成 | 高质量矢量图标 |
 | **Recraft** | 中文原生支持 | 无背景优化 | 中文创作、透明背景 |
-| **Claude** | 多语言 | AI代码生成 | 复杂SVG、编程创作 |
+| **OpenAI** | 多语言 | AI智能生成 | 复杂创意、多样化风格 |
 
 ## 🏗️ 技术架构
 
@@ -224,7 +245,7 @@ docker-compose logs -f
          │
          ▼
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│    SVG.IO       │    │     Recraft     │    │     Claude      │
+│    SVG.IO       │    │     Recraft     │    │     OpenAI      │
 │   API Call      │    │    API Call     │    │   API Call      │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
          │                       │                       │

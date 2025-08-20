@@ -82,7 +82,6 @@ func unifiedGenerateHandler(serviceManager *service.ServiceManager, translateSer
 		if !req.SkipTranslate && translateService != nil && req.Provider == types.ProviderSVGIO {
 			translateCtx, cancel := context.WithTimeout(r.Context(), 45*time.Second)
 			defer cancel()
-
 			translated, err := translateService.Translate(translateCtx, req.Prompt)
 			if err != nil {
 				log.Printf("[%s] Translation failed: %v", providerName, err)

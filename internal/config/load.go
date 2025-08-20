@@ -31,7 +31,7 @@ func LoadFromEnv() (*Config, error) {
 		MaxRetries: getEnvAsInt("SVGIO_MAX_RETRIES", 3),
 		Enabled:    getEnvAsBool("SVGIO_ENABLED", true),
 		Endpoints: SVGIOEndpoints{
-			Generate: getEnvAsString("SVGIO_GENERATE_ENDPOINT", "/v1/generate"),
+			Generate: getEnvAsString("SVGIO_GENERATE_ENDPOINT", "/v1/generate-image"),
 		},
 	}
 
@@ -63,8 +63,8 @@ func LoadFromEnv() (*Config, error) {
 	// 翻译服务配置
 	config.Translation = TranslationConfig{
 		Enabled:      getEnvAsBool("TRANSLATION_ENABLED", true),
-		ServiceURL:   getEnvAsString("TRANSLATION_SERVICE_URL", "https://api.openai.com/v1/chat/completions"),
-		DefaultModel: getEnvAsString("TRANSLATION_DEFAULT_MODEL", "gpt-3.5-turbo"),
+		ServiceURL:   getEnvAsString("TRANSLATION_SERVICE_URL", "https://api.qnaigc.com/v1/chat/completions"),
+		DefaultModel: getEnvAsString("TRANSLATION_DEFAULT_MODEL", "claude-4.0-sonnet"),
 		Timeout:      getEnvAsDuration("TRANSLATION_TIMEOUT", "45s"),
 		MaxRetries:   getEnvAsInt("TRANSLATION_MAX_RETRIES", 2),
 	}
